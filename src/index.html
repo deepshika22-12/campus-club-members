@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Club Members</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f2f5fa;
+            color: #253047;
+        }
+        header {
+            background: #263b70;
+            color: white;
+            padding: 25px 8%;
+        }
+        header h1 { margin: 0 0 8px; }
+        header p { margin: 0; color: #dce5ff; }
+        main { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 3px 12px #182d4a12;
+        }
+        h2 { margin-top: 0; color: #263b70; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        label { display: block; font-size: 14px; margin-bottom: 6px; font-weight: bold; }
+        input, select {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid #cbd3e1;
+            border-radius: 7px;
+            font-size: 14px;
+        }
+        .actions { margin-top: 18px; display: flex; gap: 10px; }
+        button {
+            border: 0;
+            border-radius: 7px;
+            padding: 10px 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .primary { background: #3157a4; color: white; }
+        .secondary { background: #e8edf7; color: #263b70; }
+        .edit { background: #e5efff; color: #2356a6; }
+        .delete { background: #ffebeb; color: #b52b2b; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 750px; }
+        th, td { padding: 13px 10px; border-bottom: 1px solid #e7ebf2; text-align: left; }
+        th { background: #f4f6fb; color: #455576; font-size: 13px; }
+        td { font-size: 14px; }
+        .status { color: #21804c; font-weight: bold; }
+        #message { margin-top: 12px; font-size: 14px; }
+        @media(max-width: 700px) {
+            .form-grid { grid-template-columns: 1fr; }
+            header { padding: 22px 20px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Campus Club Members</h1>
+        <p>Manage club members, roles and participation in one place.</p>
+    </header>
+
+    <main>
+        <section class="card">
+            <h2 id="formTitle">Add New Member</h2>
+            <form id="memberForm">
+                <div class="form-grid">
+                    <div>
+                        <label for="memberId">Member ID</label>
+                        <input id="memberId" required placeholder="e.g. CM101">
+                    </div>
+                    <div>
+                        <label for="name">Full Name</label>
+                        <input id="name" required placeholder="Member name">
+                    </div>
+                    <div>
+                        <label for="club">Club</label>
+                        <input id="club" required placeholder="e.g. QUBATE">
+                    </div>
+                    <div>
+                        <label for="year">Year</label>
+                        <select id="year" required>
+                            <option value="">Select year</option>
+                            <option>1</option><option>2</option>
+                            <option>3</option><option>4</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="role">Role</label>
+                        <input id="role" placeholder="e.g. Member">
+                    </div>
+                    <div>
+                        <label for="points">Points</label>
+                        <input id="points" type="number" min="0" value="0">
+                    </div>
+                    <div>
+                        <label for="interests">Interests</label>
+                        <input id="interests" placeholder="Quiz, Debate, Events">
+                    </div>
+                    <div>
+                        <label for="status">Status</label>
+                        <select id="status">
+                            <option>Active</option>
+                            <option>Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="primary" type="submit" id="saveBtn">Add Member</button>
+                    <button class="secondary" type="button" id="cancelBtn" hidden>Cancel</button>
+                </div>
+                <p id="message"></p>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Club Members</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Member ID</th><th>Name</th><th>Club</th>
+                            <th>Year</th><th>Role</th><th>Points</th>
+                            <th>Interests</th><th>Status</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberList">
+                        <tr><td colspan="9">Loading members...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById("memberForm");
+        const list = document.getElementById("memberList");
+        const message = document.getElementById("message");
+        let editingId = null;
+
+        function escapeHTML(value) {
+            return String(value ?? "").replace(/[&<>"']/g, char => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;",
+                '"': "&quot;", "'": "&#39;"
+            })[char]);
+        }
+
+        async function loadMembers() {
+            try {
+                const response = await fetch("/api/members");
+                const members = await response.json();
+
+                if (!members.length) {
+                    list.innerHTML = '<tr><td colspan="9">No members added yet.</td></tr>';
+                    return;
+                }
+
+                list.innerHTML = members.map(member => `
+                    <tr>
+                        <td>${escapeHTML(member.memberId)}</td>
+                        <td>${escapeHTML(member.name)}</td>
+                        <td>${escapeHTML(member.club)}</td>
+                        <td>${escapeHTML(member.year)}</td>
+                        <td>${escapeHTML(member.role)}</td>
+                        <td>${escapeHTML(member.points)}</td>
+                        <td>${escapeHTML(Array.isArray(member.interests) ? member.interests.join(", ") : member.interests)}</td>
+                        <td>${escapeHTML(member.status)}</td>
+                        <td>
+                            <button class="edit" data-action="edit" data-id="${escapeHTML(member.memberId)}">Edit</button>
+                            <button class="delete" data-action="delete" data-id="${escapeHTML(member.memberId)}">Delete</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (error) {
+                list.innerHTML = '<tr><td colspan="9">Could not load members.</td></tr>';
+            }
+        }
+
+        function resetForm() {
+            form.reset();
+            document.getElementById("memberId").disabled = false;
+            document.getElementById("points").value = 0;
+            editingId = null;
+            document.getElementById("formTitle").textContent = "Add New Member";
+            document.getElementById("saveBtn").textContent = "Add Member";
+            document.getElementById("cancelBtn").hidden = true;
+            message.textContent = "";
+        }
+
+        form.addEventListener("submit", async event => {
+            event.preventDefault();
+
+            const member = {
+                memberId: document.getElementById("memberId").value.trim(),
+                name: document.getElementById("name").value.trim(),
+                club: document.getElementById("club").value.trim(),
+                year: document.getElementById("year").value,
+                role: document.getElementById("role").value.trim(),
+                points: Number(document.getElementById("points").value) || 0,
+                interests: document.getElementById("interests").value
+                    .split(",").map(item => item.trim()).filter(Boolean),
+                status: document.getElementById("status").value
+            };
+
+            const url = editingId
+                ? `/api/members/${encodeURIComponent(editingId)}`
+                : "/api/members";
+            const method = editingId ? "PUT" : "POST";
+
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(member)
+                });
+                const result = await response.json();
+
+                if (!response.ok) throw new Error(result.message || "Operation failed.");
+
+                message.textContent = result.message;
+                resetForm();
+                await loadMembers();
+            } catch (error) {
+                message.textContent = error.message;
+            }
+        });
+
+        list.addEventListener("click", async event => {
+            const button = event.target.closest("button[data-action]");
+            if (!button) return;
+
+            const id = button.dataset.id;
+            const action = button.dataset.action;
+
+            if (action === "edit") {
+                const response = await fetch("/api/members");
+                const members = await response.json();
+                const member = members.find(item => item.memberId === id);
+                if (!member) return;
+
+                editingId = id;
+                document.getElementById("memberId").value = member.memberId;
+                document.getElementById("memberId").disabled = true;
+                document.getElementById("name").value = member.name || "";
+                document.getElementById("club").value = member.club || "";
+                document.getElementById("year").value = member.year || "";
+                document.getElementById("role").value = member.role || "";
+                document.getElementById("points").value = member.points || 0;
+                document.getElementById("interests").value =
+                    Array.isArray(member.interests) ? member.interests.join(", ") : (member.interests || "");
+                document.getElementById("status").value = member.status || "Active";
+                document.getElementById("formTitle").textContent = "Edit Member";
+                document.getElementById("saveBtn").textContent = "Save Changes";
+                document.getElementById("cancelBtn").hidden = false;
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+
+            if (action === "delete" && confirm(`Delete member ${id}?`)) {
+                try {
+                    const response = await fetch(`/api/members/${encodeURIComponent(id)}`, {
+                        method: "DELETE"
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || "Delete failed.");
+                    if (editingId === id) resetForm();
+                    await loadMembers();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+        });
+
+        document.getElementById("cancelBtn").addEventListener("click", resetForm);
+        loadMembers();
+    </script>
+</body>
+</html>
